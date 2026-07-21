@@ -20,6 +20,14 @@ curl -o .git/hooks/commit-msg https://raw.githubusercontent.com/aurevelle/automa
 chmod +x .git/hooks/commit-msg
 ```
 
+ OPTIONAL: To install globally instead of locally, replace step 3 with:
+ ```bash
+ mkdir -p ~/.config/git/hooks
+curl -o .git/hooks/commit-msg https://raw.githubusercontent.com/aurevelle/automatic-conventional-commits/main/commit-msg
+ chmod +x ~/.config/git/hooks/commit-msg
+ git config --global core.hooksPath ~/.config/git/hooks
+ ```
+
 ## Configuration
 The script requires a [Gemini API key](https://aistudio.google.com/api-keys). Add this environment variable to your shell profile (~/.bashrc, ~/.zshrc, etc.):
 ```bash
