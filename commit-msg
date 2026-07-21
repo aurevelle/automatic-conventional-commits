@@ -156,7 +156,6 @@ fi
     printf "  - ${CYAN}ci${RESET}        ${PINK}(CI configuration files and scripts)${RESET}\n"
     printf "  - ${CYAN}chore${RESET}     ${PINK}(maintenance tasks, dependencies)${RESET}\n"
     printf "  - ${CYAN}revert${RESET}    ${PINK}(reverts a previous commit)${RESET}\n"
-    printf "  - ${CYAN}help${RESET}      ${PINK}(you give up)${RESET}\n"
     printf "\n"
     exit 1
 fi
