@@ -16,7 +16,7 @@ echo "module.exports = {extends: ['@commitlint/config-conventional']};" > ~/.con
 
 3. Download and enable the hook
 ```bash
-curl -o .git/hooks/commit-msg [https://raw.githubusercontent.com/aurevelle/automatic-conventional-commits/main/commit-msg](https://raw.githubusercontent.com/aurevelle/automatic-conventional-commits/main/commit-msg)
+curl -o .git/hooks/commit-msg https://raw.githubusercontent.com/aurevelle/automatic-conventional-commits/main/commit-msg
 chmod +x .git/hooks/commit-msg
 ```
 
