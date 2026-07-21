@@ -1,0 +1,163 @@
+#!/bin/sh
+
+IF_FAIL=$(npx --no -- commitlint --config ~/.config/commitlint/config.js --edit "$1" 2>&1)
+
+if [ $? -ne 0 ]; then
+    INPUT_MSG=$(head -n 1 "$1")
+
+    RED="\033[1;31m"
+    GREEN="\033[1;32m"
+    YELLOW="\033[1;33m"
+    BLUE="\033[1;34m"
+    CYAN="\033[1;36m"
+    PINK="\033[1;35m"
+    BOLD="\033[1m"
+    RESET="\033[0m"
+
+    printf "\n"
+    printf "${YELLOW}Expected Format:${RESET}\n"
+    printf "  ${CYAN}<type>${RESET}(${PINK}<scope>${RESET}): ${GREEN}<description>${RESET}\n"
+    printf "\n"
+
+    printf "${BLUE}Generating suggestion based on changes...${RESET}\n"
+
+    STAGED_DIFF=$(git diff --cached | head -c 3000)
+
+    if ! command -v jq >/dev/null 2>&1; then
+        printf "  ${YELLOW}Tip:${RESET} Install 'jq' to enable commit suggestions.\n"
+    elif [ -z "$GEMINI_API_KEY" ]; then
+        printf "  ${YELLOW}Tip:${RESET} Export GEMINI_API_KEY in your terminal profile to see suggestions here.\n"
+    elif [ -z "$STAGED_DIFF" ]; then
+        printf "  ${YELLOW}Note:${RESET} No staged changes found to analyze.\n"
+    else
+        PROMPT=$(cat << 'EOF'
+        You are a strict code assistant. Write a Conventional Commit message for the provided git diff.
+
+### FORMATTING & LENGTH
+1. Output EXACTLY: `type(scope): description` on the first line.
+2. Limit the first line to 50 characters.
+3. Do not end the first line with a period.
+4. The first line must be all lowercase, except for specific proper nouns, file names, or class names.
+5. The second line MUST be completely blank.
+6. If the change requires a body, the third line onwards MUST be a short bulleted list using hyphens (-).
+7. Wrap body text at 72 characters.
+8. DO NOT wrap the final output in markdown blocks (```).
+9. DO NOT include any conversational text, greetings, or explanations. OUTPUT ONLY THE RAW COMMIT MESSAGE.
+
+### CONTENT & LOGIC
+10. Use the imperative, present tense for the description (e.g., 'fix bug', not 'fixed bug' or 'fixes bug').
+11. Start each bullet point with a capitalized imperative verb (e.g., '- Add...', '- Remove...', '- Refactor...').
+12. Third line onwards (the bullet points) should use standard sentence capitalization.
+13. Describe the logical intent of the change (the "what" and "why"), rather than just listing the names of the files that were modified.
+14. Base the bullet points strictly on the provided git diff. Do not invent, guess, or hallucinate context that is not present in the code.
+15. Limit the body to a maximum of 3 to 10 bullet points. Group related changes logically rather than detailing every single syntax edit.
+16. When referencing specific variables, functions, classes, or file names in the bullet points, wrap them in single backticks.
+17. Adopt a definitive, confident tone. Do not use hedging language like 'appears to', 'seems to', 'probably', or 'likely'.
+
+### SCOPE & TYPE
+18. Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
+19. FEAT vs FIX DEFINITIONS:
+- Use 'feat' ONLY when introducing entirely new functionality, capabilities, or user-facing behaviors that did not exist before.
+- Use 'fix' when repairing bugs, resolving unintended behavior, fixing crashes, or correcting regressions.
+- If a change adds missing validation, error handling, type-checking, or restrictions to prevent errors in existing features, classify it as a 'fix', not a 'feat'.
+20. The scope must be a single, short noun representing the module (e.g., 'ui', 'db', 'auth').
+21. If the change affects the global project or spans multiple unrelated modules/folders, omit the scope and parentheses entirely (e.g., `feat: add feature`).
+22. If the diff contains multiple unrelated changes, prioritize the most significant architectural or feature change for the first line. Document secondary changes as separate bullet points in the body.
+
+### FOOTERS & EDGE CASES
+23. BREAKING CHANGES: If the diff contains a breaking change, append a `!` after the scope (e.g., `feat(api)!: ...`) and add a completely blank line followed by a `BREAKING CHANGE: ` footer at the end of the message.
+24. REVERTS: When using the 'revert' type, add a footer that references the commit SHAs that are being reverted.
+25. SMALL CHANGES: Evaluate the complexity of the diff. If the change is small, straightforward, or mostly boilerplate (under ~50 lines of obvious logic), omit the bulleted list entirely and output ONLY the first line.
+26. DELETIONS: If the diff consists primarily of deleting code or removing files, prioritize the verbs 'Remove', 'Delete', or 'Clean up', and briefly state what was removed.
+27. AUTO-GENERATED FILES: If the diff contains large auto-generated files (e.g., lockfiles, snapshots, compiled assets), do not analyze their specific line changes. Summarize them broadly (e.g., '- Update dependency lockfile') or omit them from the bullets if manual code changes exist.
+28. ISSUE NUMBERS: Do not invent or include issue numbers, PR numbers, or Jira tickets unless they are explicitly written inside the provided diff text.
+
+### EXAMPLE OUTPUT:
+feat(access): allow limited users to use quickbuy command
+
+- Add 'quickbuy' to LIMITED_COMMANDS and set to true
+- Fix typo in top comment ('whta' -> 'what')
+
+### GIT DIFF TO ANALYZE:
+[INSERT_DIFF_HERE]
+EOF
+)
+
+JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg diff "$STAGED_DIFF" '{
+    contents: [{
+        parts: [{
+            text: ($prompt + "\n\nDiff:\n" + $diff)
+        }]
+}],
+generationConfig: {
+    temperature: 0.0
+}
+}')
+
+RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$GEMINI_API_KEY" \
+    -H 'Content-Type: application/json' \
+    -d "$JSON_PAYLOAD")
+
+ERROR_MSG=$(echo "$RESPONSE" | jq -r '.error.message // empty' 2>/dev/null)
+
+if [ -n "$ERROR_MSG" ]; then
+    SUGGESTION="API Error: $ERROR_MSG"
+else
+    SUGGESTION=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' 2>/dev/null)
+    if [ -z "$SUGGESTION" ]; then
+        SUGGESTION="API Error: Raw response: $RESPONSE"
+    fi
+fi
+
+printf "  ${YELLOW}Suggestion:${RESET}\n\n${GREEN}%s${RESET}\n\n" "$SUGGESTION"
+
+if [ -c /dev/tty ]; then
+    printf "  ${BLUE}What would you like to do?${RESET}\n"
+    printf "    ${BOLD}[y]${RESET} Accept and commit\n"
+    printf "    ${BOLD}[e]${RESET} Edit this suggestion\n"
+    printf "    ${BOLD}[n]${RESET} Deny and exit\n"
+    printf "  ${BLUE}Choice (y/e/n): ${RESET}"
+
+    read -r choice < /dev/tty
+
+    case "$choice" in
+        y|Y)
+            printf "%s\n" "$SUGGESTION" > "$1"
+            printf "  ${GREEN}✔ Commit accepted!${RESET}\n"
+            exit 0
+            ;;
+        e|E)
+            printf "%s\n" "$SUGGESTION" > "$1"
+            ${EDITOR:-nano} "$1" < /dev/tty
+            printf "  ${GREEN}✔ Proceeding with edited commit...${RESET}\n"
+            exit 0
+            ;;
+        n|N)
+            printf "  ${YELLOW}✖ Suggestion denied.${RESET}\n"
+            ;;
+        *)
+            printf "%s\n" "$SUGGESTION" > "$1"
+            printf "  ${GREEN}✔ Commit accepted!${RESET}\n"
+            exit 0
+    esac
+fi
+    fi
+
+    printf "\n"
+    printf "${BLUE}Allowed Types:${RESET}\n"
+    printf "  - ${CYAN}feat${RESET}      ${PINK}(new feature)${RESET}\n"
+    printf "  - ${CYAN}fix${RESET}       ${PINK}(bug fix)${RESET}\n"
+    printf "  - ${CYAN}docs${RESET}      ${PINK}(documentation changes)${RESET}\n"
+    printf "  - ${CYAN}style${RESET}     ${PINK}(formatting, missing semicolons, etc.)${RESET}\n"
+    printf "  - ${CYAN}refactor${RESET}  ${PINK}(code refactoring without feature/fix)${RESET}\n"
+    printf "  - ${CYAN}perf${RESET}      ${PINK}(performance improvements)${RESET}\n"
+    printf "  - ${CYAN}test${RESET}      ${PINK}(adding or updating tests)${RESET}\n"
+    printf "  - ${CYAN}build${RESET}     ${PINK}(build system or external dependencies)${RESET}\n"
+    printf "  - ${CYAN}ci${RESET}        ${PINK}(CI configuration files and scripts)${RESET}\n"
+    printf "  - ${CYAN}chore${RESET}     ${PINK}(maintenance tasks, dependencies)${RESET}\n"
+    printf "  - ${CYAN}revert${RESET}    ${PINK}(reverts a previous commit)${RESET}\n"
+    printf "  - ${CYAN}help${RESET}      ${PINK}(you give up)${RESET}\n"
+    printf "\n"
+    exit 1
+fi
+
