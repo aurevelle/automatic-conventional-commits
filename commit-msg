@@ -61,6 +61,7 @@ if [ $? -ne 0 ]; then
 - Use 'fix' when repairing bugs, resolving unintended behavior, fixing crashes, or correcting regressions.
 - If a change adds missing validation, error handling, type-checking, or restrictions to prevent errors in existing features, classify it as a 'fix', not a 'feat'.
 - If the change ONLY affects documentation or comments, ALWAYS use the 'docs' type, even if you are fixing a typo or error.
+- AI PROMPTS: Changes to this internal LLM prompt (adding rules, examples, or instructions) directly alter the hook's core logic. Classify them strictly as 'fix' (if correcting poor AI suggestions) or 'feat' (if adding new suggestion capabilities). NEVER use 'docs' or 'chore'.
 20. The scope must be a single, short noun representing the module (e.g., 'ui', 'db', 'auth').
 21. If the change affects the global project or spans multiple unrelated modules/folders, omit the scope and parentheses entirely (e.g., `feat: add feature`).
 22. If the diff contains multiple unrelated changes, prioritize the most significant architectural or feature change for the first line. Document secondary changes as separate bullet points in the body.
@@ -87,12 +88,6 @@ example 3:
 fix(quickbuy): reduce items per page limit to 5
 
 example 4:
-fix(quickbuy): update item display format and pagination limit
-
-- Append empty inline code block to item string in `cmds/quickbuy.js`
-- Increase pagination limit from 5 to 10 in `cmds/quickbuy.js`
-
-example 5:
 fix(quickbuy): update item display format and pagination limit
 
 - Append empty inline code block to item string in `cmds/quickbuy.js`
