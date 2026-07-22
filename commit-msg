@@ -35,7 +35,7 @@ if [ $? -ne 0 ]; then
 
 ### FORMATTING & LENGTH
 1. Output EXACTLY: `type(scope): description` on the first line.
-2. Limit the first line to 50 characters.
+2. Limit the first line to a maximum of 10 words. Keep it extremely brief.
 3. Do not end the first line with a period.
 4. The first line must be all lowercase, except for specific proper nouns, file names, or class names.
 5. The second line MUST be completely blank.
@@ -60,6 +60,7 @@ if [ $? -ne 0 ]; then
 - Use 'feat' ONLY when introducing entirely new functionality, capabilities, or user-facing behaviors that did not exist before.
 - Use 'fix' when repairing bugs, resolving unintended behavior, fixing crashes, or correcting regressions.
 - If a change adds missing validation, error handling, type-checking, or restrictions to prevent errors in existing features, classify it as a 'fix', not a 'feat'.
+- If the change ONLY affects documentation or comments, ALWAYS use the 'docs' type, even if you are fixing a typo or error.
 20. The scope must be a single, short noun representing the module (e.g., 'ui', 'db', 'auth').
 21. If the change affects the global project or spans multiple unrelated modules/folders, omit the scope and parentheses entirely (e.g., `feat: add feature`).
 22. If the diff contains multiple unrelated changes, prioritize the most significant architectural or feature change for the first line. Document secondary changes as separate bullet points in the body.
@@ -72,11 +73,30 @@ if [ $? -ne 0 ]; then
 27. AUTO-GENERATED FILES: If the diff contains large auto-generated files (e.g., lockfiles, snapshots, compiled assets), do not analyze their specific line changes. Summarize them broadly (e.g., '- Update dependency lockfile') or omit them from the bullets if manual code changes exist.
 28. ISSUE NUMBERS: Do not invent or include issue numbers, PR numbers, or Jira tickets unless they are explicitly written inside the provided diff text.
 
-### EXAMPLE OUTPUT:
-feat(access): allow limited users to use quickbuy command
+### EXAMPLE OUTPUTS:
+example 1:
+feat(access): allow limited users to use quickbuy
 
 - Add 'quickbuy' to LIMITED_COMMANDS and set to true
 - Fix typo in top comment ('whta' -> 'what')
+
+example 2:
+docs: update account linking instructions
+
+example 3:
+fix(quickbuy): reduce items per page limit to 5
+
+example 4:
+fix(quickbuy): update item display format and pagination limit
+
+- Append empty inline code block to item string in `cmds/quickbuy.js`
+- Increase pagination limit from 5 to 10 in `cmds/quickbuy.js`
+
+example 5:
+fix(quickbuy): update item display format and pagination limit
+
+- Append empty inline code block to item string in `cmds/quickbuy.js`
+- Increase pagination limit from 5 to 10 in `cmds/quickbuy.js`
 
 ### GIT DIFF TO ANALYZE:
 [INSERT_DIFF_HERE]
@@ -86,7 +106,7 @@ EOF
 JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg diff "$STAGED_DIFF" '{
     contents: [{
         parts: [{
-            text: ($prompt + "\n\nDiff:\n" + $diff)
+            text: ($prompt | sub("\\[INSERT_DIFF_HERE\\]"; $diff))
         }]
 }],
 generationConfig: {
@@ -94,7 +114,7 @@ generationConfig: {
 }
 }')
 
-RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$GEMINI_API_KEY" \
+RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=$GEMINI_API_KEY" \
     -H 'Content-Type: application/json' \
     -d "$JSON_PAYLOAD")
 
@@ -156,6 +176,7 @@ fi
     printf "  - ${CYAN}ci${RESET}        ${PINK}(CI configuration files and scripts)${RESET}\n"
     printf "  - ${CYAN}chore${RESET}     ${PINK}(maintenance tasks, dependencies)${RESET}\n"
     printf "  - ${CYAN}revert${RESET}    ${PINK}(reverts a previous commit)${RESET}\n"
+    printf "  - ${CYAN}help${RESET}      ${PINK}(you give up)${RESET}\n"
     printf "\n"
     exit 1
 fi
